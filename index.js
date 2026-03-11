@@ -17,7 +17,7 @@
  */
 
 import 'dotenv/config';
-import { fetchMRDiffs } from './gitlab.js';
+import { fetchMRDiffs, getProject } from './gitlab.js';
 import { parseDiffs }    from './diffParser.js';
 import { buildSkill }    from './skillBuilder.js';
 // import { applySkill }    from './skillApplier.js';
@@ -27,14 +27,18 @@ import { parseArgs }     from './utils.js';
 async function main() {
   const args = parseArgs();
 
+  console.log(`🔍 Step 0: 解析项目 ID (${args.refProject}) ...`);
+  const project = await getProject(args.refProject);
+  console.log(`   ✅ Project ID: ${project.id}`);
+
   console.log('📥 Step 1: 拉取参考 MR diff ...');
-  const rawDiffs = await fetchMRDiffs(args.refProject, args.refMr);
+  const rawDiffs = await fetchMRDiffs(project.id, args.refMr);
 
   console.log('🔍 Step 2: 解析 diff 结构 ...');
   const parsedDiff = parseDiffs(rawDiffs);
 
   console.log('🤖 Step 3: AI 分析，生成迁移 Skill ...');
-  const skill = await buildSkill(parsedDiff, args.skillOutput);
+  await buildSkill(parsedDiff, args.skillOutput);
   console.log(`   ✅ Skill 已保存至 ${args.skillOutput}`);
 
 //   console.log('⚙️  Step 4: 将 Skill 应用到目标项目 ...');

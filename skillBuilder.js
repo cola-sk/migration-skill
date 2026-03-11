@@ -1,83 +1,67 @@
 /**
  * skillBuilder.js
- * 调用 Claude API，从 diff 中提取迁移规则，
- * 输出结构化 Skill JSON，可保存复用。
+ * 从 diff 中生成可复用的 AI Agent Migration Skill（.prompt.md 格式）
  */
 
 import fs                        from 'fs/promises';
+import path                      from 'path';
 import { diffToPromptText }      from './diffParser.js';
-
-/**
- * Skill 结构：
- * {
- *   version: 1,
- *   summary: "简短描述",
- *   rules: [
- *     {
- *       id: "rule-001",
- *       description: "将 foo() 替换为 bar()",
- *       type: "replace" | "add-import" | "remove-import" | "refactor" | "config",
- *       match: {
- *         pattern: "foo\\(([^)]+)\\)",   // 正则，用于定位需要改动的代码
- *         fileGlob: "**\/*.js",           // 作用范围
- *         context: "描述上下文",
- *       },
- *       transform: {
- *         before: "foo($1)",              // 变更前示例
- *         after:  "bar($1)",              // 变更后示例
- *         note:   "补充说明",
- *       }
- *     }
- *   ]
- * }
- */
 
 export async function buildSkill(parsedDiffs, outputPath) {
   const diffText = diffToPromptText(parsedDiffs);
 
-  const systemPrompt = `你是一个代码迁移专家。
-用户会给你一段 unified diff，代表某次代码迁移的参考改动。
-你需要从 diff 中提取出可复用的迁移规则，以便自动应用到其他项目。
+  const content = `---
+mode: agent
+description: "代码迁移 Skill：根据参考 diff，将结构相似的工程迁移到新版本"
+---
 
-输出要求：
-1. 只输出 JSON，不要任何额外说明或 markdown 代码块。
-2. 严格遵守下面的 schema：
-{
-  "version": 1,
-  "summary": "一句话总结本次迁移的核心内容",
-  "rules": [
-    {
-      "id": "rule-001",
-      "description": "规则的人类可读说明",
-      "type": "replace | add-import | remove-import | refactor | config",
-      "match": {
-        "pattern": "用于匹配需要改动的代码的正则表达式字符串（JS 语法）",
-        "fileGlob": "适用的文件通配符，如 **/*.js",
-        "context": "描述在什么情况下触发此规则"
-      },
-      "transform": {
-        "before": "变更前的代码示例片段",
-        "after":  "变更后的代码示例片段",
-        "note":   "补充说明（可选）"
-      }
-    }
-  ]
-}
-3. 规则要尽量原子化，一条规则只描述一个变更点。
-4. pattern 要足够通用，能匹配同类代码，而不是只匹配 diff 中的那一行。`;
+# 代码迁移任务
 
-  const userPrompt = `以下是参考迁移的 diff：\n\n${diffText}`;
+你是一位代码迁移专家。你的任务是参照下方提供的 **参考 diff**，对当前工程执行相同的代码迁移。
 
-  const content = `${systemPrompt}\n\n${userPrompt}`;
+参考 diff 来自一个已完成迁移的工程，当前工程与其具有相似的代码结构和技术栈。你需要理解每处改动的**迁移意图**，并将相同的模式应用到当前工程。
 
-  if (outputPath) {
-    await fs.writeFile(outputPath, content, 'utf-8');
-  }
+---
+
+## 迁移原则
+
+- **理解意图，而非照搬**：分析每处 diff 背后的目的（如 API 升级、依赖替换、架构调整），再应用到当前工程
+- **结构映射**：当前工程的文件结构可能与参考工程略有不同，根据功能相似性找到对应文件
+- **保持一致性**：同类改动在所有文件中统一应用，避免遗漏
+- **不破坏现有逻辑**：只改动与迁移相关的部分，不引入额外重构
+
+---
+
+## 迁移步骤
+
+1. **解读 diff**：逐文件阅读参考 diff，归纳每类改动的迁移模式（API 替换 / import 变更 / 配置调整 / 逻辑重构等）
+2. **扫描工程**：在当前工程中定位与参考工程功能对应的文件
+3. **逐模式应用**：按照归纳出的迁移模式，依次修改对应文件
+4. **兜底处理**：对参考工程中存在但当前工程缺失的文件，判断是否需要新建或跳过
+5. **自检**：确认所有改动与参考 diff 的迁移意图一致，无遗漏
+
+---
+
+## 参考 Diff
+
+> 以下是参考工程的完整迁移 diff，请以此为唯一依据完成迁移：
+
+\`\`\`diff
+${diffText}
+\`\`\`
+`;
+
+  const finalPath = outputPath
+    ? (path.extname(outputPath) ? outputPath : outputPath + '.prompt.md')
+    : './skills/migration.prompt.md';
+
+  await fs.mkdir(path.dirname(finalPath), { recursive: true });
+  await fs.writeFile(finalPath, content, 'utf-8');
+
   return content;
 }
 
-/** 从文件加载已有 skill，复用时使用 */
+/** 从文件加载已有 skill */
 export async function loadSkill(skillPath) {
-  const raw = await fs.readFile(skillPath, 'utf-8');
-  return JSON.parse(raw);
+  return fs.readFile(skillPath, 'utf-8');
 }

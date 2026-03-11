@@ -17,18 +17,25 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
+export async function getProject(idOrPath) {
+  return apiFetch(`/projects/${enc(idOrPath)}`);
+}
+
 // ── 分页拉取全部结果 ──────────────────────────────────────────────────────────
-async function fetchAll(path, params = {}) {
-  const qs = new URLSearchParams({ per_page: 100, ...params });
+async function fetchAll(path, params = {}, perPage = 20) {
+  const qs = new URLSearchParams({ per_page: perPage, ...params });
   let   url = `${BASE}/api/v4${path}?${qs}`;
   const all = [];
   while (url) {
     const res  = await fetch(url, { headers: HEADS });
-    if (!res.ok) throw new Error(`${url} → ${res.status}`);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${url} → ${res.status}: ${text}`);
+    }
     const page = await res.json();
     all.push(...page);
     url = res.headers.get('x-next-page')
-      ? `${BASE}/api/v4${path}?${new URLSearchParams({ ...params, per_page: 100, page: res.headers.get('x-next-page') })}`
+      ? `${BASE}/api/v4${path}?${new URLSearchParams({ ...params, per_page: perPage, page: res.headers.get('x-next-page') })}`
       : null;
   }
   return all;
@@ -37,7 +44,7 @@ async function fetchAll(path, params = {}) {
 // ── 拉取 MR 的所有文件 diff ───────────────────────────────────────────────────
 export async function fetchMRDiffs(projectId, mrIid) {
   const items = await fetchAll(`/projects/${enc(projectId)}/merge_requests/${mrIid}/diffs`);
-  return items.map(f => ({
+  return items.filter(f => f.new_path !== 'pnpm-lock.yaml' && f.old_path !== 'pnpm-lock.yaml').map(f => ({
     oldPath:     f.old_path,
     newPath:     f.new_path,
     diff:        f.diff,          // unified diff 原文
