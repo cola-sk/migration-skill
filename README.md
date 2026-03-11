@@ -21,7 +21,7 @@ cp .env.example .env
 编辑 `.env`，设置 GitLab URL 和 Personal Access Token：
 
 ```
-GITLAB_URL=https://gitlab.ninebot.com
+GITLAB_URL=https://gitlab.com
 GITLAB_TOKEN=glpat-xxxxx  # API scope
 ```
 
