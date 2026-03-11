@@ -1,0 +1,13 @@
+{
+  "name": "migration-skill",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "apply": "node index.js --skill-input ./skills/latest.json"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "minimatch": "^9.0.4"
+  }
+}
